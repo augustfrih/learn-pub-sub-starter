@@ -35,15 +35,52 @@ func main() {
 		routing.ExchangePerilDirect,
 		routing.PauseKey+"."+userName,
 		routing.PauseKey,
-		pubsub.SimpleQueueTransient)
+		pubsub.SimpleQueueTransient,
+	)
 	if err != nil {
 		log.Fatalf("could not connect to pause, err: %v", err)
 	}
 	fmt.Printf("Queue %v declared and bound!\n", queue.Name)
 
+	gameState := gamelogic.NewGameState(userName)
 
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt)
-	<-signalChan
-	fmt.Printf("Closing connection\n")
+	for {
+		input := gamelogic.GetInput()
+		if err != nil {
+			log.Fatalf("couldnt get input %v", err)
+		}
+
+		switch input[0] {
+		case "spawn":
+			err = gameState.CommandSpawn(input)
+			if err != nil {
+				log.Printf("couldnt spawn using command: %s", input)
+			}
+
+		case "move":
+			battleMove, err := gameState.CommandMove(input)
+			if err != nil {
+				log.Printf("couldnt spawn using command: %s", input)
+			} else {
+				log.Printf("move %s completed", battleMove.ToLocation)
+			}
+
+		case "status":
+			gameState.CommandStatus()
+
+		case "help":
+			gamelogic.PrintClientHelp()
+
+		case "spam":
+			fmt.Println("Spamming not allowed yet!")
+
+		case "quit":
+			gamelogic.PrintQuit()
+			return
+
+		default:
+			fmt.Println("cant understand command")
+
+		}
+	}
 }

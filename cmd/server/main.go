@@ -34,7 +34,6 @@ func main() {
 		return
 	}
 
-InputLoop:
 	for {
 		input := gamelogic.GetInput()
 		if err != nil {
