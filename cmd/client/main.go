@@ -3,8 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"os"
-	"os/signal"
 
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
@@ -30,19 +28,46 @@ func main() {
 		log.Fatalf("could not get username, err: %v", err)
 	}
 
-	_, queue, err := pubsub.DeclareAndBind(
+	gameState := gamelogic.NewGameState(userName)
+
+	chann, err := rabbitConn.Channel()
+	if err != nil {
+		log.Printf("couldnt establish channel. error: %v", err)
+	}
+
+	err = pubsub.SubscribeJSON(
 		rabbitConn,
 		routing.ExchangePerilDirect,
 		routing.PauseKey+"."+userName,
 		routing.PauseKey,
 		pubsub.SimpleQueueTransient,
+		handlerPause(gameState),
 	)
 	if err != nil {
-		log.Fatalf("could not connect to pause, err: %v", err)
+		log.Fatalf("could not subscribe to pause, err: %v", err)
 	}
-	fmt.Printf("Queue %v declared and bound!\n", queue.Name)
 
-	gameState := gamelogic.NewGameState(userName)
+	err = pubsub.SubscribeJSON(
+		rabbitConn,
+		routing.ExchangePerilTopic,
+		routing.ArmyMovesPrefix+"."+userName,
+		routing.ArmyMovesPrefix+".*",
+		pubsub.SimpleQueueTransient,
+		handlerMove(gameState, chann),
+	)
+	if err != nil {
+		log.Fatalf("could not subscribe to move, err: %v", err)
+	}
+
+	err = pubsub.SubscribeJSON(
+		rabbitConn,
+		routing.ExchangePerilTopic,
+		routing.WarRecognitionsPrefix,
+		routing.WarRecognitionsPrefix+".*",
+		pubsub.SimpleQueueDurable,
+		handlerWar(gameState),
+	)
+
 
 	for {
 		input := gamelogic.GetInput()
@@ -60,9 +85,20 @@ func main() {
 		case "move":
 			battleMove, err := gameState.CommandMove(input)
 			if err != nil {
-				log.Printf("couldnt spawn using command: %s", input)
+				log.Printf("couldnt move using command: %s. err: %v", input, err)
 			} else {
-				log.Printf("move %s completed", battleMove.ToLocation)
+				err = pubsub.PublishJSON(
+					chann,
+					routing.ExchangePerilTopic,
+					routing.ArmyMovesPrefix+"."+userName,
+					battleMove,
+				)
+				if err != nil {
+					log.Printf("couldnt publish move using command: %s. err: %v", input, err)
+				}
+				if err == nil {
+					log.Printf("move %s completed", battleMove.ToLocation)
+				}
 			}
 
 		case "status":

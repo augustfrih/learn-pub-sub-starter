@@ -34,6 +34,19 @@ func main() {
 		return
 	}
 
+	_, queue, err := pubsub.DeclareAndBind(
+		rabbitConn,
+		routing.ExchangePerilTopic,
+		routing.GameLogSlug,
+		routing.GameLogSlug+".*",
+		pubsub.SimpleQueueDurable,
+	)
+	if err != nil {
+		log.Fatalf("could not connect to pause, err: %v", err)
+	}
+	fmt.Printf("Queue %v declared and bound!\n", queue.Name)
+
+
 	for {
 		input := gamelogic.GetInput()
 		if err != nil {

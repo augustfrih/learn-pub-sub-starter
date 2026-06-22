@@ -18,6 +18,10 @@ func DeclareAndBind(
 	key string,
 	queueType SimpleQueueType, // SimpleQueueType is an "enum" type I made to represent "durable" or "transient"
 ) (*amqp.Channel, amqp.Queue, error) {
+	var table amqp.Table
+	table = make(amqp.Table)
+	table["x-dead-letter-exchange"] = "peril_dlx"
+
 	chann, err := conn.Channel()
 	if err != nil {
 		return nil, amqp.Queue{}, err
@@ -28,7 +32,7 @@ func DeclareAndBind(
 		queueType != SimpleQueueDurable,
 		queueType != SimpleQueueDurable,
 		false,
-		nil)
+		table)
 
 	err = chann.QueueBind(queue.Name, key, exchange, false, nil)
 
